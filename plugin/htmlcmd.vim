@@ -1,21 +1,18 @@
 " HTML Commands.
 " Author: Michael Geddes <michaelrgeddes@optushome.com.au>
-" Version: 2.2
+" Version: 2.3
 " Please feel free to use and modify all or part of this script.
 " I would appreciate being acknowledged in any derived scripts, and would 
 " appreciate any updates/modifications.
 
 " Define htmlcmd_NOHEADER to not include <m-0> style
 " Define htmlcmd_BF for some of Benji's commands that haven't been adopted quite yet.
-" Define htmlcmd_NOAUTOCLOSE to not map > to auto-close open tags.
+" Define htmlcmd_AUTOCLOSE to map > to auto-close open tags.
 " &usersign is your username for modification
 
 " This code allows htmlcmd to behave as a FT plugin and as a buffoptions.vim
 " style plugin.
 if !exists('DoingSOURCE')
-  if exists("b:did_ftplugin")
-	finish
-  endif
   if exists('*ReadFileTypeMap')
 	SO <sfile>
 	finish
@@ -197,7 +194,11 @@ endfun
 
 
 if has('menu')
-	amenu H&TML.GenerateTOC :call GenerateTOC()<cr>
+	if exists(':Bmenu')
+		Bamenu H&TML.Generate&TOC :call GenerateTOC()<cr>
+	else
+		amenu H&TML.GenerateTOC :call GenerateTOC()<cr>
+	endif
 endif
 function! GenerateTOC(...)
   let types=""
@@ -411,11 +412,11 @@ endif
 " (external link)                                                               
 " Add internal link to loc. in reg 0
 
-nmap ,al "='<a href="'.@*.'" target="_top"></a>'<cr>p
-nmap ,aL "='<li><a href="'.@*.'" target="_top"></a></li>'<cr>p
-nmap ,l "='<a href="#'.@".'"></a>'<cr>p
+nmap <buffer> <localleader>al "='<a href="'.@*.'" target="_top"></a>'<cr>p
+nmap <buffer> <localleader>aL "='<li><a href="'.@*.'" target="_top"></a></li>'<cr>p
+nmap <buffer> <localleader>l "='<a href="#'.@".'"></a>'<cr>p
 "nmap ,yf :let @*='file:///'.expand('%:p:gs+\+/+')<cr>
-nmap ,yf :let @*=<SID>URLPathOf(expand('%:p'))<cr>
+nmap <buffer> <localleader>yf :let @*=<SID>URLPathOf(expand('%:p'))<cr>
 
 fun! s:URLPathOf( filename)
   let file=s:UNCPathOf(a:filename)
@@ -577,7 +578,7 @@ imap <buffer> º <m-s-;>
 
 "FileTypes: html,xml
 " Close everything that hasn't been closed
-if ! exists('htmlcmd_NOAUTOCLOSE')
+if exists('htmlcmd_AUTOCLOSE')
 inoremap <buffer> > ><c-o>mz<c-o>F<<c-r>=<SID>EndTag()<CR><c-o>f><right>
 endif
 
