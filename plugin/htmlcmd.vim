@@ -1,6 +1,6 @@
 " HTML Commands.
 " Author: Michael Geddes <michaelrgeddes@optushome.com.au>
-" Version: 2.3
+" Version: 2.4
 " Please feel free to use and modify all or part of this script.
 " I would appreciate being acknowledged in any derived scripts, and would 
 " appreciate any updates/modifications.
@@ -9,6 +9,10 @@
 " Define htmlcmd_BF for some of Benji's commands that haven't been adopted quite yet.
 " Define htmlcmd_AUTOCLOSE to map > to auto-close open tags.
 " &usersign is your username for modification
+
+" :GenTOC  -- Generate Table Of Contents
+" :GenTOC * -- Generate Table Of Contents - prompting for levels
+"
 
 " This code allows htmlcmd to behave as a FT plugin and as a buffoptions.vim
 " style plugin.
@@ -195,25 +199,40 @@ endfun
 
 if has('menu')
 	if exists(':Bmenu')
-		Bamenu H&TML.Generate&TOC :call GenerateTOC()<cr>
+		if BufferOneShot('htmlcmd')
+			Bamenu 45.10 HTM&L.&Generate\ TOC :GenTOC *<CR>
+			Bamenu 45.20 HTM&L.&Refresh\ TOC :GenTOC<cr>
+		endif
 	else
-		amenu H&TML.GenerateTOC :call GenerateTOC()<cr>
+		amenu 45.10 HTM&L.&Generate\ TOC :GenTOC *<CR>
+		amenu 45.20 HTM&L.&Refresh\ TOC :GenTOC<cr>
 	endif
 endif
+com! -nargs=? GenTOC call GenerateTOC(<q-args>)
+
 function! GenerateTOC(...)
   let types=""
+  let do_prompt=0
   if a:0 > 0 
-	let types=a:1
+  	if a:1=='*'
+		let do_prompt=1
+	else
+		let types=a:1
+	endif
   endif
   let line=1
   let found=0
   let TOC=0
   let end=line('$')
+  let mtoc='<!--TOC\(-\([^->]*\)\)\=-->'
   while line<end
-	if getline(line)=~'<!--TOC-->'
+	if getline(line)=~mtoc
 	  let TOC=line
-	  if getline(line+1) !~ "<!--TOC-->"
-		exe (line+1).',/<!--ENDTOC-->/-1 d'
+	  if getline(line+1) !~ mtoc
+		if types==''
+		" Get the types originally used.
+			let types=substitute(matchstr(getline(line),mtoc),mtoc,'\2','')
+		endif
 	  endif
 	  let found=1
 	  break
@@ -226,13 +245,27 @@ function! GenerateTOC(...)
 	exe "norm /\\C<BODY\<CR>/>\<CR>a\<CR><h1>Table of Contents</h1>\<cr>\<ESC>"
 	let TOC=line('.')-1
   endif
-  if !found
-	if g:htmlCmd_debug| echo '------' |endif
-	call append(TOC,"<!--TOC-->")
-	let TOC=TOC+1
-	call append(TOC,"<!--ENDTOC-->")
-	let end=end+2
+  if g:htmlCmd_debug| echo '------' |endif
+  if do_prompt
+  	let txt=((types=='')?'default':types)
+  	let txt=inputdialog('Level Modes {1|a|i} :', txt)
+	if txt==''
+		return 0
+	elseif txt=='default'
+		let types=''
+	else
+		let types=txt
+	endif
   endif
+  if found
+	exe TOC.',/<!--ENDTOC-->/ d'
+	let TOC=TOC-1
+  endif
+  call append(TOC, "<!--TOC".((types=='')? '' : ('-'.types)).'-->')
+  let TOC=TOC+1
+  call append(TOC,"<!--ENDTOC-->")
+  let end=line('$')
+ 
   let line=TOC
   let sTOC=""
   let firstlevel=0
@@ -358,8 +391,8 @@ nmap <buffer> <m-5> i<m-5>
 nmap <buffer> <m-6> i<m-6>
 
 imap <buffer> <c-cr> <esc>o
-imap <buffer> <s-cr> <lt>br/><CR>
-imap <buffer> <m--> <lt>hr/>
+imap <buffer> <s-cr> <lt>br /><CR>
+imap <buffer> <m--> <lt>hr />
 
 imap <buffer> &<space> &nbsp;
 imap <buffer> && &amp;
@@ -603,14 +636,14 @@ if !exists('htmlcmd_NOHEADER')
 	let g_html_htmlheader="
 				\<HTML>\<CR>
 				\<HEAD>\<CR>
-				\<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=windows-1252\"/>\<CR>
-				\<META NAME=\"Generator\" CONTENT=\"Vim %VERSION%\"/>\<CR>
-				\<META NAME=\"ProgID\" CONTENT=\"Vim.Application\"/>\<CR>
+				\<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=windows-1252\" />\<CR>
+				\<META NAME=\"Generator\" CONTENT=\"Vim %VERSION%\" />\<CR>
+				\<META NAME=\"ProgID\" CONTENT=\"Vim.Application\" />\<CR>
 				\<TITLE>#CURSOR#</TITLE>\<CR>
 				\</HEAD>\<CR>
 				\<BODY TEXT=\"#000f90\" LINK=\"#3030ff\" VLINK=\"#202020\" >\<CR>\<CR>
 				\<!-- Trailer -->\<CR>
-				\<hr/>\<CR>
+				\<hr />\<CR>
 				\<table width=\"100%\"><tr width=\"100%\"><td width=\"50%\">\<CR>
 				\<small>Last Modified: 00 Aaa 0000 00:00 by Nobody</small></td>\<CR>
 				\<td align=right width=50%><small>Powered by <b>Vim</b></small></td></tr>\<CR>
