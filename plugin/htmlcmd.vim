@@ -1,6 +1,6 @@
 " HTML Commands.
 " Author: Michael Geddes <michaelrgeddes@optushome.com.au>
-" Version: 2.4
+" Version: 2.5
 " Please feel free to use and modify all or part of this script.
 " I would appreciate being acknowledged in any derived scripts, and would 
 " appreciate any updates/modifications.
@@ -8,11 +8,14 @@
 " Define htmlcmd_NOHEADER to not include <m-0> style
 " Define htmlcmd_BF for some of Benji's commands that haven't been adopted quite yet.
 " Define htmlcmd_AUTOCLOSE to map > to auto-close open tags.
-" &usersign is your username for modification
+" usersign is your username for modification
 
 " :GenTOC  -- Generate Table Of Contents
 " :GenTOC * -- Generate Table Of Contents - prompting for levels
 "
+" History:
+"   2.5: Added more menus - made them useful for detaching, and able to
+"   customise the name.
 
 " This code allows htmlcmd to behave as a FT plugin and as a buffoptions.vim
 " style plugin.
@@ -22,6 +25,26 @@ if !exists('DoingSOURCE')
 	finish
   endif
   " Else we assume we are behaving as a plugin
+endif
+
+
+if !exists( 'html_menu_leader')
+    let html_menu_leader='HTM&L'
+endif
+if !exists( 'html_menu_pos')
+    let html_menu_pos='45'
+endif
+if !exists( 'html_font_menu_leader')
+    let html_font_menu_leader='.&Font'
+endif
+if !exists( 'html_font_menu_pos')
+    let html_font_menu_pos='.10'
+endif
+if !exists( 'html_defs_menu_leader')
+    let html_defs_menu_leader='.&Defs'
+endif
+if !exists( 'html_defs_menu_pos')
+    let html_defs_menu_pos='.20'
 endif
 
 function! s:HTMLCloseAll( line1, column1, line2, column2, cline,ccolumn)
@@ -117,22 +140,26 @@ if !exists("g:htmlCmd_debug")
   let g:htmlCmd_debug=0
 endif
 
+" - The main function that handles toggling of HTML commands. It searches
+"   backwards for the last token of the specified type, and returns its
+"   counterpart. It also closes all nested tags that have been opened. 
+
 function! s:FindBack(option)
   return s:Find__Back(a:option,1)
 endfun
 
-function! s:Find__Fwd()
-  let mx='<\s*\(/\=\)\(\k\+\)\>[^>]*>'
-
-  let curline=line('.')
-  let curcol=col('.')
-  let text=getline(curline)
-  let text=strpart(text,curcol,65535)
-  while 1
-	
-  endwhile
-
-endfun
+"function! s:Find__Fwd()
+"  let mx='<\s*\(/\=\)\(\k\+\)\>[^>]*>'
+"
+"  let curline=line('.')
+"  let curcol=col('.')
+"  let text=getline(curline)
+"  let text=strpart(text,curcol,65535)
+"  while 1
+"	
+"  endwhile
+"
+"endfun
 
 function! s:Find__Back(option, insertit)
   let ws=&ws
@@ -196,18 +223,73 @@ function! s:Find__Back(option, insertit)
   return closed.openit
 endfun
 
+let s:bmenu_oneshot=0
+if has('menu') && exists(':Bmenu') && BufferOneShot('htmlcmd')
+    exe FindBufferSID()
+    let s:bmenu_oneshot=1
+endif
 
+fun! s:MapAndMenuStyle( rootpos, rootmenu, key, menu, html)
+    exe "imap <buffer> ".a:key." <c-r>=<SID>FindBack('".a:html."')<CR>"
+    exe "vmap <buffer> ".a:key." :call <SID>SurroundHTM('".a:html."')<CR>"
+    exe "nmap <buffer> ".a:key." i<c-r>=<SID>FindBack('".a:html."')<CR>"
+
+    if has('menu')
+        if !exists( 's:menu_number' )|let s:menu_number =10|else|let s:menu_number=s:menu_number+10|endif
+        let menuname=a:rootpos.'.'.s:menu_number.' '.a:rootmenu.'.'.a:menu
+        if exists(':Bmenu')
+            if s:bmenu_oneshot " Only do it once
+                " exe FindBufferSID()
+                exe "Bimenu ".menuname." <c-r>=<SID>FindBack('".a:html."')<CR>"
+                exe "Bvmenu ".menuname." :call <SID>SurroundHTM('".a:html."')<CR>"
+                exe "Bnmenu ".menuname." i<c-r>=<SID>FindBack('".a:html."')<CR>"
+            endif
+        else
+            exe "imenu ".menuname." <c-r>=<SID>FindBack('".a:html."')<CR>"
+            exe "vmenu ".menuname." :call <SID>SurroundHTM('".a:html."')<CR>"
+            exe "nmenu ".menuname." i<c-r>=<SID>FindBack('".a:html."')<CR>"
+        endif
+    endif
+endfun
+let s:menu_number=10
+
+let s:menu_number=10
+let s:menpos=html_menu_pos.html_font_menu_pos
+let s:menlead=html_menu_leader.html_font_menu_leader
 if has('menu')
 	if exists(':Bmenu')
-		if BufferOneShot('htmlcmd')
-			Bamenu 45.10 HTM&L.&Generate\ TOC :GenTOC *<CR>
-			Bamenu 45.20 HTM&L.&Refresh\ TOC :GenTOC<cr>
+		if s:bmenu_oneshot
+            exe 'amenu '.s:menpos.'.200 '.s:menlead.'.-1- <nul>'
+            exe 'amenu '.html_menu_pos.'.25 '.html_menu_leader.'.-1- <nul>'
+			exe 'Bamenu '.html_menu_pos.'.100 '.html_menu_leader.'.&Generate\ TOC :GenTOC *<CR>'
+			exe 'Bamenu '.html_menu_pos.'.110 '.html_menu_leader.'.&Refresh\ TOC :GenTOC<cr>'
 		endif
 	else
-		amenu 45.10 HTM&L.&Generate\ TOC :GenTOC *<CR>
-		amenu 45.20 HTM&L.&Refresh\ TOC :GenTOC<cr>
+        exe 'amenu '.html_menu_pos.'.100 '.html_menu_leader.'.&Generate\ TOC :GenTOC *<CR>'
+        exe 'amenu '.html_menu_pos.'.110 '.html_menu_leader.'.&Refresh\ TOC :GenTOC<cr>'
 	endif
 endif
+
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-b>', '&Bold', 'b')
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-m>', '&Italic', 'i')
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-u>', '&Underline', 'u')
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-p>', '&Para', 'p')
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<c-k>', '&Keyboard', 'kbd')
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-s-b>', 'Big', 'big')
+
+let s:menpos=html_menu_pos.html_defs_menu_pos
+let s:menlead=html_menu_leader.html_defs_menu_leader
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-d>', '&Table Definition', 'td')
+
+let s:menpos=html_menu_pos.html_defs_menu_pos
+let s:menlead=html_menu_leader.html_defs_menu_leader
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-1>', 'Level\ &1', 'h1')
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-2>', 'Level\ &2', 'h2')
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-3>', 'Level\ &3', 'h3')
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-4>', 'Level\ &4', 'h4')
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-5>', 'Level\ &5', 'h5')
+call s:MapAndMenuStyle(s:menpos,s:menlead,'<m-6>', 'Level\ &6', 'h6')
+
 com! -nargs=? GenTOC call GenerateTOC(<q-args>)
 
 function! GenerateTOC(...)
@@ -337,28 +419,6 @@ endfun
 "FileTypes: html xml
 vmap <buffer> <s-â> <m-s-b>
 
-imap <buffer> <m-s-b> <c-r>=<SID>FindBack('big')<CR>
-imap <buffer> <m-b> <c-r>=<SID>FindBack('b')<CR>
-imap <buffer> <m-m> <c-r>=<SID>FindBack('i')<CR>
-imap <buffer> <m-u> <c-r>=<SID>FindBack('u')<CR>
-imap <buffer> <m-p> <c-r>=<SID>FindBack('p')<CR>
-imap <buffer> <m-k> <c-r>=<SID>FindBack('kbd')<CR>
-imap <buffer> <m-d> <c-r>=<SID>FindBack('td')<cr>
-vmap <buffer> <m-s-b> :call <SID>SurroundHTM('big')<CR>
-vmap <buffer> <m-b> :call <SID>SurroundHTM('b')<CR>
-vmap <buffer> <m-m> :call <SID>SurroundHTM('i')<CR>
-vmap <buffer> <m-u> :call <SID>SurroundHTM('u')<CR>
-vmap <buffer> <m-p> :call <SID>SurroundHTM('p')<CR>
-vmap <buffer> <m-k> :call <SID>SurroundHTM('kbd')<CR>
-vmap <buffer> <m-d> :call <SID>SurroundHTM('td')<CR>
-nmap <buffer> <m-s-b> i<m-s-b>
-nmap <buffer> <m-b> i<m-b>
-nmap <buffer> <m-m> i<m-m>
-nmap <buffer> <m-u> i<m-u>
-nmap <buffer> <m-p> i<m-p>
-"nmap<buffer>  <m-k> i<m-k>
-nmap <buffer> <m-d> i<m-d>
-
 imap <buffer> <m-8> <li></li><esc>F<i
 nmap <buffer> <m-8> i<m-8>
 vmap <buffer> <m-8> :call <SID>SurroundHTM('li')<cr>
@@ -369,35 +429,13 @@ imap <buffer> <m-,> <lt>ul><cr></ul><esc>F<O<TAB>
 nmap <buffer> <m-,> o<m-,>
 
 if !exists('htmlcmd_NOHEADER')
-imap <buffer> <m-0> <c-r>=substitute(g_html_htmlheader,'%VERSION%',strpart(v:version,0,1).'.'.strpart(v:version,1,1),'')<cr>
+imap <buffer> <m-0> <c-r>=substitute(g_html_htmlheader,'%VERSION%',(v:version/100).'.'.(v:version%100),'')<cr>
 endif
-vmap <buffer> <m-1> :call <SID>SurroundHTM('h1')<cr>
-vmap <buffer> <m-2> :call <SID>SurroundHTM('h2')<cr>
-vmap <buffer> <m-3> :call <SID>SurroundHTM('h3')<cr>
-vmap <buffer> <m-4> :call <SID>SurroundHTM('h4')<cr>
-vmap <buffer> <m-5> :call <SID>SurroundHTM('h5')<cr>
-vmap <buffer> <m-6> :call <SID>SurroundHTM('h6')<cr>
-imap <buffer> <m-1> <c-r>=<SID>FindBack('h1')<cr>
-imap <buffer> <m-2> <c-r>=<SID>FindBack('h2')<cr>
-imap <buffer> <m-3> <c-r>=<SID>FindBack('h3')<cr>
-imap <buffer> <m-4> <c-r>=<SID>FindBack('h4')<cr>
-imap <buffer> <m-5> <c-r>=<SID>FindBack('h5')<cr>
-imap <buffer> <m-6> <c-r>=<SID>FindBack('h6')<cr>
-nmap <buffer> <m-1> i<m-1>
-nmap <buffer> <m-2> i<m-2>
-nmap <buffer> <m-3> i<m-3>
-nmap <buffer> <m-4> i<m-4>
-nmap <buffer> <m-5> i<m-5>
-nmap <buffer> <m-6> i<m-6>
 
 imap <buffer> <c-cr> <esc>o
-imap <buffer> <s-cr> <lt>br /><CR>
-imap <buffer> <m--> <lt>hr />
+imap <buffer> <s-cr> <lt>br<space>/><CR>
+imap <buffer> <m--> <lt>hr<space>/>
 
-imap <buffer> &<space> &nbsp;
-imap <buffer> && &amp;
-imap <buffer> &< &lt;
-imap <buffer> &> &gt;
 if 0
 imap <buffer> &'< &lsquo;
 imap <buffer> &'> &rsquo;
@@ -405,15 +443,43 @@ imap <buffer> &"< &ldquo;
 imap <buffer> &"> &rdquo;
 endif
 
-fun! s:HTMLQuote( type)
-  if col('.') ==1 || getline('.')[col('.')-2] =~'\s' 
-	  return '&l'.a:type.';'
+if !exists('b:htmlcmd_map_symbols_to_numbers')
+  let b:htmlcmd_map_symbols_to_numbers=(&filetype=='xml')
+endif
+
+" See http://evolt.org/article/ala/17/21234/
+fun! s:HTMLSymbolMap( type)
+  if !b:htmlcmd_map_symbols_to_numbers
+    return a:type
+  elseif (a:type =='lsquo')
+    return '#8216'
+  elseif (a:type =='rsquo')
+    return '#8217'
+  elseif (a:type =='ldquo')
+    return '#8220'
+  elseif (a:type =='rdquo')
+    return '#8221'
+  elseif (a:type == 'mdash')
+    return '#8212'
   else
-	  return '&r'.a:type.';'
+    return a:type
+  endif
+endfun
+
+fun! s:HTMLQuote( type)
+  if col('.') ==1 || getline('.')[col('.')-2] =~'\s\|>' 
+	  return '&'.s:HTMLSymbolMap('l'.a:type).';'
+  else
+	  return '&'.s:HTMLSymbolMap('r'.a:type).';'
   endif  
 endfun
 imap <buffer> &' <c-r>=<SID>HTMLQuote('squo')<CR>
 imap <buffer> &" <c-r>=<SID>HTMLQuote('dquo')<CR>
+imap <buffer> &- &<c-r>=<SID>HTMLSymbolMap('mdash')<CR>;
+imap <buffer> &<space> &<c-r>=<SID>HTMLSymbolMap('nbsp')<CR>;
+imap <buffer> && &<c-r>=<SID>HTMLSymbolMap('amp')<CR>;
+imap <buffer> &< &<c-r>=<SID>HTMLSymbolMap('lt')<CR>;
+imap <buffer> &> &<c-r>=<SID>HTMLSymbolMap('gt')<CR>;
 
 "fun! HTMLFindQuote( quotename )
 "  if a:quotename = "'"
@@ -440,6 +506,7 @@ if exists("htmlcmd_BF")
   imap <buffer> <m-l> <a href=""><Left><Left>
   imap <buffer> <m-n> <a name=""><Left><Left>
 endif
+
 
 " Add a html link to the location stored in the windows clipboard
 " (external link)                                                               
@@ -503,6 +570,8 @@ fun! s:EndTag()
 	return ''
 endfun
 
+
+" Main function number for handling closing of HTML commands 
 fun! s:CloseLast( returnall )
 	let reA='\v\<(/=<\k+>)([^/>"]+|"[^"]*")*[/>]'
 	let reMatch='\c\v\<(<\k+>)\>.{-}\</<\1>\>'
@@ -616,7 +685,9 @@ inoremap <buffer> > ><c-o>mz<c-o>F<<c-r>=<SID>EndTag()<CR><c-o>f><right>
 endif
 
 " Close everything
-imap <buffer> ¾ <m->>
+if has('win32')
+    imap <buffer> ¾ <m->>
+endif
 imap <buffer> <m->> <c-r>=<SID>HTMLCloseAll(0,0,line('$')+1,0,line('.'),col('.'))<cr>
 
 if !exists("usersign")
@@ -634,21 +705,23 @@ if !exists('htmlcmd_NOHEADER')
 	aug END
 	let g_html_gocursor="\<esc>?#CURSOR#\<cr>cf#"
 	let g_html_htmlheader="
-				\<HTML>\<CR>
-				\<HEAD>\<CR>
-				\<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=windows-1252\" />\<CR>
-				\<META NAME=\"Generator\" CONTENT=\"Vim %VERSION%\" />\<CR>
-				\<META NAME=\"ProgID\" CONTENT=\"Vim.Application\" />\<CR>
-				\<TITLE>#CURSOR#</TITLE>\<CR>
-				\</HEAD>\<CR>
-				\<BODY TEXT=\"#000f90\" LINK=\"#3030ff\" VLINK=\"#202020\" >\<CR>\<CR>
+				\<!DOCTYPE html PUBLIC \"-//W3C//DTD HTML 4.01 Transitional//EN\">\<CR>
+				\<html>\<CR>
+				\<head>\<CR>
+				\<meta http-equiv=\"Content-Type\" content=\"text/html; charset=iso-8859-1\" />\<CR>
+				\<meta name=\"Generator\" content=\"Vim %VERSION%\" />\<CR>
+				\<meta name=\"ProgID\" content=\"Vim.Application\" />\<CR>
+				\<title>#CURSOR#</title>\<CR>
+				\</head>\<CR>
+				\<body text=\"#000f90\" link=\"#3030ff\" vlink=\"#202020\" bgcolor=\"#e0f0ff\">\<CR>\<CR>
 				\<!-- Trailer -->\<CR>
 				\<hr />\<CR>
-				\<table width=\"100%\"><tr width=\"100%\"><td width=\"50%\">\<CR>
-				\<small>Last Modified: 00 Aaa 0000 00:00 by Nobody</small></td>\<CR>
-				\<td align=right width=50%><small>Powered by <b>Vim</b></small></td></tr>\<CR>
-				\</table>\<cr>
-				\</BODY></HTML>\<CR>
+				\<table width=\"100%\"><tr>\<CR>
+				\<td width=\"50%\"><small>Last Modified: 00 Aaa 0000 00:00 by Nobody</small></td>\<CR>
+				\<td align=\"right\" width=\"50%\"><small>Powered by <b>Vim</b></small></td>\<CR>
+				\</tr></table>\<CR>
+				\</body>\<CR>
+				\</html>\<CR>
 				\".g_html_gocursor
 endif
 
