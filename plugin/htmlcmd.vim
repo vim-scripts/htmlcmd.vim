@@ -1,9 +1,13 @@
 " HTML Commands.
 " Author: Michael Geddes <michaelrgeddes@optushome.com.au>
-" Version: 2.1
+" Version: 2.2
+" Please feel free to use and modify all or part of this script.
+" I would appreciate being acknowledged in any derived scripts, and would 
+" appreciate any updates/modifications.
 
 " Define htmlcmd_NOHEADER to not include <m-0> style
 " Define htmlcmd_BF for some of Benji's commands that haven't been adopted quite yet.
+" Define htmlcmd_NOAUTOCLOSE to not map > to auto-close open tags.
 " &usersign is your username for modification
 
 " This code allows htmlcmd to behave as a FT plugin and as a buffoptions.vim
@@ -78,12 +82,12 @@ function! s:HTMLCloseAll( line1, column1, line2, column2, cline,ccolumn)
 	if endtype==''
 	  if g:htmlCmd_debug| echo stillopen  |endif
 	  if type=='/'
-		if stillopen !~'\<'.seq.'\>,'
+		if stillopen !~? '\<'.seq.'\>,'
 		  let badlist=badlist.'</'.seq.'>,'
 		  "break
-		elseif pastcursor && openbeforecursor==stillopen
+		elseif pastcursor && openbeforecursor ==? stillopen
 		  if g:htmlCmd_debug|echo 'END:'.seq.':'.stillopen|endif
-		  let stillopen=substitute(stillopen,'\<'.seq.'\>,.\{-}$','','i')
+		  let stillopen=substitute(stillopen,'\c\<'.seq.'\>,.\{-}$','','i')
 		  break
 		else
 		  let my='\(^.\{-}\)\<'.seq.'\>,'
@@ -192,7 +196,10 @@ function! s:Find__Back(option, insertit)
 endfun
 
 
-function! s:GenerateTOC(...)
+if has('menu')
+	amenu H&TML.GenerateTOC :call GenerateTOC()<cr>
+endif
+function! GenerateTOC(...)
   let types=""
   if a:0 > 0 
 	let types=a:1
@@ -285,8 +292,7 @@ fun! s:Surround(begin,end) range
 endfun
 else
 fun! s:Surround(begin,end) range
-  exe "norm `>i".a:end."\<esc>"
-  exe "norm `<i".a:begin."\<esc>"
+  exe "norm `>a".a:end."\<esc>`<i".a:begin."\<esc>"
 endfun
 endif
 fun! s:SurroundHTM(tag) range
@@ -365,7 +371,7 @@ imap <buffer> &"< &ldquo;
 imap <buffer> &"> &rdquo;
 endif
 
-fun! HTMLQuote( type)
+fun! s:HTMLQuote( type)
   if col('.') ==1 || getline('.')[col('.')-2] =~'\s' 
 	  return '&l'.a:type.';'
   else
@@ -452,44 +458,163 @@ else
   endfun
 endif
 
+fun! s:EndTag()
+	let l=line(".")
+	let c=col(".")
+	let txt=strpart(getline(l),c)
+	if txt[0]=='/'
+		return s:CloseLast(1)
+"		return s:Find__Back( matchstr(txt,'\k\+') ,0 )
+	endif
+	return ''
+endfun
+
+fun! s:CloseLast( returnall )
+	let reA='\v\<(/=<\k+>)([^/>"]+|"[^"]*")*[/>]'
+	let reMatch='\c\v\<(<\k+>)\>.{-}\</<\1>\>'
+	if &syntax == 'html'
+		let reSingles='br|hr'
+	else
+		let reSingles='--'
+	endif
+	let reIncompleteStart='<.*$'
+	let reIncompleteEnd='^.\{-}>'
+
+	let l=line('.')
+	let txt=strpart(getline(l),0,col('.')-1)
+
+	" Search Forwards for the next enclosing
+	let fl=line('.')
+	let ftxt=strpart(getline(fl),col('.')-1)
+	let ahead=''
+	while fl < line('$')
+		let i=0
+		while 1
+			let j=matchend(ftxt,reA, i)
+			if j==-1
+				break
+			else
+				if ftxt[j-1]=='>'
+					let word=substitute(matchstr(ftxt,reA,i),reA,'\1','')
+					if word !~ '\c\v<('.reSingles.')>'
+						let ahead=ahead.'<'.word.'>'
+					endif
+					let i=j
+				else
+					let i=j+1
+				endif
+			endif
+		endwhile
+
+		let ahead=substitute(ahead, reMatch, '', 'g')
+		if ahead =~ '</'
+			break
+		endif
+
+		let fl=fl+1
+		let ftxt=matchstr(ftxt,reIncompleteStart,i).getline(fl)
+	endwhile
+
+	let closedahead= matchstr(ahead, '\v^\</\zs<\k+>\ze\>')
+
+	" Search backwards for the unclosed
+	let left=''
+	while l > 1
+		let i=0
+		let lleft=''
+		while 1
+			let j=matchend(txt,reA, i)
+			if j==-1
+				break
+			else
+				if txt[j-1]=='>'
+					let word=substitute(matchstr(txt,reA,i),reA,'\1','')
+					if word !~ '\v\c<('.reSingles.')>'
+						let lleft=lleft.'<'.word.'>'
+					endif
+					let i=j
+				else
+					let i=j+1
+				endif
+			endif
+		endwhile
+		let left=substitute(lleft.left, reMatch, '', 'g')
+		if left =~ '<[^/]'
+			if ! a:returnall || matchend(left,'\c\v\<'.closedahead.'\>')== strlen(left)
+				break
+			endif
+		endif
+
+		let l=l-1
+		let iend=matchend(txt,reIncompleteEnd)
+		let first=matchend(txt,reA)
+		if iend>=0 && txt[iend-1] == '>' && (first < 0  || ( iend < first ))
+			let txt=getline(l).strpart(txt,0,iend)
+		else
+			let txt=getline(l)
+		endif
+	endwhile
+
+	let left = substitute(left,'\v^.*\</<\k+>\>', '', 'g')
+
+	let left=substitute(left,'\c^.*<'.closedahead.'>','','')
+
+	if a:returnall
+		let ret=''
+		while left != ''
+			let ret=matchstr(left,'^<[^>]*>').ret
+			let left=substitute(left,'^<[^>]*>','','')
+		endwhile
+		return substitute(ret,'\v<\k+>','/&','g')
+	else
+		return substitute(matchstr(left,'\v<\k+>\>$'),'\<','</','')
+	endif
+endfun
+
+imap <buffer> <m-;> <c-r>=<SID>CloseLast(0)<CR>
+imap <buffer> <m-s-;> <c-r>=<SID>CloseLast(1)<CR>
+imap <buffer> º <m-s-;>
 
 "FileTypes: html,xml
 " Close everything that hasn't been closed
-imap > ><c-o>F<<c-r>=<SID>Find__Back('<c-r><c-w>',0)<cr><c-o>f><right>
+if ! exists('htmlcmd_NOAUTOCLOSE')
+inoremap <buffer> > ><c-o>mz<c-o>F<<c-r>=<SID>EndTag()<CR><c-o>f><right>
+endif
+
 " Close everything
-imap ¾ <m->>
-imap <m->> <c-r>=<SID>HTMLCloseAll(0,0,line('$')+1,0,line('.'),col('.'))<cr>
+imap <buffer> ¾ <m->>
+imap <buffer> <m->> <c-r>=<SID>HTMLCloseAll(0,0,line('$')+1,0,line('.'),col('.'))<cr>
 
 if !exists("usersign")
   let usersign=$USERNAME
 endif
 
 if !exists('htmlcmd_NOHEADER')
-aug htmlwrite
-" In earlier versions, a failed ex // didn't cause an error
-if v:version < 600
-  au! BufWrite *.html /\(\<Last Modified:.*\)/mark z | exe 'call setline(line("'."'".'z"),substitute(getline("'."'".'z"),'."'".'\<\d\+\s*\a\a\a\s*\d\+\s\+\d\+:\d\+\>[^<]*\s*'."'".',"'.strftime("%d %b %Y %H:%M").' by '.usersign.'",""))'
-else
-  au! BufWrite *.html sil! /\(\<Last Modified:\)/mark z | exe 'call setline(line("'."'".'z"),substitute(getline("'."'".'z"),'."'".'\(Last Modified: \)\<\d\+\s*\a\a\a\s*\d\+\s\+\d\+:\d\+\>[^<]*\s*'."'".',"\\1'.strftime("%d %b %Y %H:%M").' by '.usersign.'",""))'
+	aug htmlwrite
+	" In earlier versions, a failed ex // didn't cause an error
+	if v:version < 600
+		au! BufWrite *.html /\(\<Last Modified:.*\)/mark z | exe 'call setline(line("'."'".'z"),substitute(getline("'."'".'z"),'."'".'\<\d\+\s*\a\a\a\s*\d\+\s\+\d\+:\d\+\>[^<]*\s*'."'".',"'.strftime("%d %b %Y %H:%M").' by '.usersign.'",""))'
+	else
+		au! BufWrite *.html sil! /\(\<Last Modified:\)/mark z | exe 'call setline(line("'."'".'z"),substitute(getline("'."'".'z"),'."'".'\(Last Modified: \)\<\d\+\s*\a\a\a\s*\d\+\s\+\d\+:\d\+\>[^<]*\s*'."'".',"\\1'.strftime("%d %b %Y %H:%M").' by '.usersign.'",""))'
+	endif
+	aug END
+	let g_html_gocursor="\<esc>?#CURSOR#\<cr>cf#"
+	let g_html_htmlheader="
+				\<HTML>\<CR>
+				\<HEAD>\<CR>
+				\<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=windows-1252\"/>\<CR>
+				\<META NAME=\"Generator\" CONTENT=\"Vim %VERSION%\"/>\<CR>
+				\<META NAME=\"ProgID\" CONTENT=\"Vim.Application\"/>\<CR>
+				\<TITLE>#CURSOR#</TITLE>\<CR>
+				\</HEAD>\<CR>
+				\<BODY TEXT=\"#000f90\" LINK=\"#3030ff\" VLINK=\"#202020\" >\<CR>\<CR>
+				\<!-- Trailer -->\<CR>
+				\<hr/>\<CR>
+				\<table width=\"100%\"><tr width=\"100%\"><td width=\"50%\">\<CR>
+				\<small>Last Modified: 00 Aaa 0000 00:00 by Nobody</small></td>\<CR>
+				\<td align=right width=50%><small>Powered by <b>Vim</b></small></td></tr>\<CR>
+				\</table>\<cr>
+				\</BODY></HTML>\<CR>
+				\".g_html_gocursor
 endif
-aug END
-let g_html_gocursor="\<esc>?#CURSOR#\<cr>cf#"
-let g_html_htmlheader="
-\<HTML>\<CR>
-\<HEAD>\<CR>
-\<META HTTP-EQUIV=\"Content-Type\" CONTENT=\"text/html; charset=windows-1252\"/>\<CR>
-\<META NAME=\"Generator\" CONTENT=\"Vim %VERSION%\"/>\<CR>
-\<META NAME=\"ProgID\" CONTENT=\"Vim.Application\"/>\<CR>
-\<TITLE>#CURSOR#</TITLE>\<CR>
-\</HEAD>\<CR>
-\<BODY TEXT=\"#000f90\" LINK=\"#3030ff\" VLINK=\"#202020\" >\<CR>\<CR>
-\<!-- Trailer -->\<CR>
-\<hr/>\<CR>
-\<table width=\"100%\"><tr width=\"100%\"><td width=\"50%\">\<CR>
-\<small>Last Modified: 00 Aaa 0000 00:00 by Nobody</small></td>\<CR>
-\<td align=right width=50%><small>Powered by <b>Vim</b></small></td></tr>\<CR>
-\</table>\<cr>
-\</BODY></HTML>\<CR>
-\".g_html_gocursor
-endif
-	
+
