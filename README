@@ -1,0 +1,31 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=14
+
+This script handles a number of mundane tasks in HTML / XML.  It allows you to create a default HTML header (Alt+0),  to define headings <h1> .. <h6> (Alt+1.. Alt+6), to toggle bold, italic, underline, paragraphs & kbd commands.  It gives shortcuts for ordered/unordered lists and row definitions.  
+
+The script has commands to insert horizontal rules, line-breaks, and a number of  special symbols (just email me to add your favourite).  
+
+It has imap mappings that give you ampersands (&&), smart-quotes (single - &' and double &"), <, > symbols,   and more.  It allow you to insert these and text descriptors or as numbers (for strict XML)
+
+You can close the next open tag (alt-;) or close all open tags at that point (alt->).  
+Not you may need to remap these for other platforms.
+
+
+If you have defined 'htmlcmd_AUTOCLOSE' then there is some reasonably intrusive code that will close open tags: 
+try typing this
+<p>Testing<b>bold</p>
+
+This should automatically close the <b>
+
+You can also generate a quick Table Of Contents for your document based on <H1>..<H6> headings.  There is a menu item to insert it.. and any options you give 
+are remembered for when you re-generate the TOC. 
+
+GenerateTOC( [<headingtypes>| * ]) 
+:GenTOC [<headingtypes>| * ]
+
+The optional argument is a string of types for each indent level. Eg. " 1ai." would mean level 1 is default (bullet), level 2 is a numbered list, level 3 has letters and level three has roman numerals. 
+It uses references where it can find them, and generates new ones where it can't.
+The arguments supplied are remembered so the TOC can be regenerated without resuplying them.
+If * is supplied as an argument, the script prompts for arguments - showing what the current values are.
+
+When used with buffermenu.vim - Menus (for TOC generation) are local to the buffer.
+
